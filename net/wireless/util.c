@@ -746,9 +746,9 @@ static void cfg80211_process_wdev_events(struct wireless_dev *wdev)
 				NULL);
 			break;
 		case EVENT_ROAMED:
-			__cfg80211_roamed(wdev, ev->rm.channel, ev->rm.bssid,
-					  ev->rm.req_ie, ev->rm.req_ie_len,
-					  ev->rm.resp_ie, ev->rm.resp_ie_len);
+			__cfg80211_roamed(wdev, ev->rm.bss, ev->rm.req_ie,
+					  ev->rm.req_ie_len, ev->rm.resp_ie,
+					  ev->rm.resp_ie_len);
 			break;
 		case EVENT_DISCONNECTED:
 			__cfg80211_disconnected(wdev->netdev,
@@ -990,7 +990,7 @@ int cfg80211_can_change_interface(struct cfg80211_registered_device *rdev,
 			if (rdev->wiphy.software_iftypes & BIT(iftype))
 				continue;
 			for (j = 0; j < c->n_limits; j++) {
-				if (!(limits[j].types & iftype))
+				if (!(limits[j].types & BIT(iftype)))
 					continue;
 				if (limits[j].max < num[iftype])
 					goto cont;

@@ -144,6 +144,22 @@ void irq_gc_mask_disable_reg_and_ack(struct irq_data *d)
 }
 
 /**
+ * irq_gc_mask_and_ack_set- Mask and ack pending interrupt
+ * @d: irq_data
+ */
+void irq_gc_mask_and_ack_set(struct irq_data *d)
+{
+	struct irq_chip_generic *gc = irq_data_get_irq_chip_data(d);
+	u32 mask = 1 << (d->irq - gc->irq_base);
+
+	irq_gc_lock(gc);
+	gc->mask_cache |= mask;
+	irq_reg_writel(gc->mask_cache, gc->reg_base + cur_regs(d)->mask);
+	irq_reg_writel(mask, gc->reg_base + cur_regs(d)->ack);
+	irq_gc_unlock(gc);
+}
+
+/**
  * irq_gc_eoi - EOI interrupt
  * @d: irq_data
  */
@@ -246,7 +262,7 @@ void irq_setup_generic_chip(struct irq_chip_generic *gc, u32 msk,
 		gc->mask_cache = irq_reg_readl(gc->reg_base + ct->regs.mask);
 
 	for (i = gc->irq_base; msk; msk >>= 1, i++) {
-		if (!msk & 0x01)
+		if (!(msk & 0x01))
 			continue;
 
 		if (flags & IRQ_GC_INIT_NESTED_LOCK)
@@ -301,7 +317,7 @@ void irq_remove_generic_chip(struct irq_chip_generic *gc, u32 msk,
 	raw_spin_unlock(&gc_lock);
 
 	for (; msk; msk >>= 1, i++) {
-		if (!msk & 0x01)
+		if (!(msk & 0x01))
 			continue;
 
 		/* Remove handler first. That will mask the irq line */

@@ -213,6 +213,8 @@ int scsi_execute(struct scsi_device *sdev, const unsigned char *cmd,
 	int ret = DRIVER_ERROR << 24;
 
 	req = blk_get_request(sdev->request_queue, write, __GFP_WAIT);
+	if (!req)
+		return ret;
 
 	if (bufflen &&	blk_rq_map_kern(sdev->request_queue, req,
 					buffer, bufflen, __GFP_WAIT))
@@ -437,8 +439,19 @@ static void scsi_run_queue(struct request_queue *q)
 		}
 
 		spin_unlock(shost->host_lock);
+
+		if (WARN((!sdev || !sdev->request_queue),
+				"request_queue is null."))
+				break;
+
 		spin_lock(sdev->request_queue->queue_lock);
 		__blk_run_queue(sdev->request_queue);
+
+
+		if (WARN((!sdev || !sdev->request_queue),
+				"request_queue is null."))
+				break;
+
 		spin_unlock(sdev->request_queue->queue_lock);
 		spin_lock(shost->host_lock);
 	}
@@ -1405,6 +1418,8 @@ static void scsi_kill_request(struct request *req, struct request_queue *q)
 
 	blk_start_request(req);
 
+	scmd_printk(KERN_INFO, cmd, "killing request\n");
+
 	sdev = cmd->device;
 	starget = scsi_target(sdev);
 	shost = sdev->host;
@@ -1486,7 +1501,6 @@ static void scsi_request_fn(struct request_queue *q)
 	struct request *req;
 
 	if (!sdev) {
-		printk("scsi: killing requests for dead queue\n");
 		while ((req = blk_peek_request(q)) != NULL)
 			scsi_kill_request(req, q);
 		return;
@@ -1695,6 +1709,15 @@ struct request_queue *scsi_alloc_queue(struct scsi_device *sdev)
 
 void scsi_free_queue(struct request_queue *q)
 {
+	unsigned long flags;
+
+	WARN_ON(q->queuedata);
+
+	/* cause scsi_request_fn() to kill all non-finished requests */
+	spin_lock_irqsave(q->queue_lock, flags);
+	q->request_fn(q);
+	spin_unlock_irqrestore(q->queue_lock, flags);
+
 	blk_cleanup_queue(q);
 }
 

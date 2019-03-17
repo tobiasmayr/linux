@@ -218,7 +218,7 @@ struct tty_port_operations {
 	/* Called on the final put of a port */
 	void (*destruct)(struct tty_port *port);
 };
-	
+
 struct tty_port {
 	struct tty_struct	*tty;		/* Back pointer */
 	const struct tty_port_operations *ops;	/* Port operations */
@@ -294,7 +294,11 @@ struct tty_struct {
 	void *driver_data;
 	struct list_head tty_files;
 
+#ifdef CONFIG_MDM_HSIC_PM
+#define N_TTY_BUF_SIZE 16384
+#else
 #define N_TTY_BUF_SIZE 4096
+#endif
 
 	/*
 	 * The following is data for the N_TTY line discipline.  For
@@ -420,6 +424,8 @@ extern void tty_driver_flush_buffer(struct tty_struct *tty);
 extern void tty_throttle(struct tty_struct *tty);
 extern void tty_unthrottle(struct tty_struct *tty);
 extern int tty_do_resize(struct tty_struct *tty, struct winsize *ws);
+extern void tty_driver_remove_tty(struct tty_driver *driver,
+				  struct tty_struct *tty);
 extern void tty_shutdown(struct tty_struct *tty);
 extern void tty_free_termios(struct tty_struct *tty);
 extern int is_current_pgrp_orphaned(void);
@@ -470,7 +476,9 @@ extern void proc_clear_tty(struct task_struct *p);
 extern struct tty_struct *get_current_tty(void);
 extern void tty_default_fops(struct file_operations *fops);
 extern struct tty_struct *alloc_tty_struct(void);
-extern int tty_add_file(struct tty_struct *tty, struct file *file);
+extern int tty_alloc_file(struct file *file);
+extern void tty_add_file(struct tty_struct *tty, struct file *file);
+extern void tty_free_file(struct file *file);
 extern void free_tty_struct(struct tty_struct *tty);
 extern void initialize_tty_struct(struct tty_struct *tty,
 		struct tty_driver *driver, int idx);

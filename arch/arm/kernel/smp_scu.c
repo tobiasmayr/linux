@@ -13,12 +13,19 @@
 
 #include <asm/smp_scu.h>
 #include <asm/cacheflush.h>
+#include <asm/cputype.h>
+
+#include <plat/cpu.h>
 
 #define SCU_CTRL		0x00
 #define SCU_CONFIG		0x04
 #define SCU_CPU_STATUS		0x08
 #define SCU_INVALIDATE		0x0c
 #define SCU_FPGA_REVISION	0x10
+
+#ifdef CONFIG_MACH_PX
+extern void logbuf_force_unlock(void);
+#endif
 
 /*
  * Get the number of CPU cores from the SCU configuration
@@ -32,14 +39,27 @@ unsigned int __init scu_get_core_count(void __iomem *scu_base)
 /*
  * Enable the SCU
  */
-void __init scu_enable(void __iomem *scu_base)
+void scu_enable(void __iomem *scu_base)
 {
 	u32 scu_ctrl;
+
+#ifdef CONFIG_ARM_ERRATA_764369
+	/* Cortex-A9 only */
+	if ((read_cpuid(CPUID_ID) & 0xff0ffff0) == 0x410fc090) {
+		scu_ctrl = __raw_readl(scu_base + 0x30);
+		if (!(scu_ctrl & 1))
+			__raw_writel(scu_ctrl | 0x1, scu_base + 0x30);
+	}
+#endif
 
 	scu_ctrl = __raw_readl(scu_base + SCU_CTRL);
 	/* already enabled? */
 	if (scu_ctrl & 1)
 		return;
+
+	if ((soc_is_exynos4412() && (samsung_rev() >= EXYNOS4412_REV_1_0)) ||
+		soc_is_exynos4210())
+		scu_ctrl |= (1<<3);
 
 	scu_ctrl |= 1;
 	__raw_writel(scu_ctrl, scu_base + SCU_CTRL);
@@ -49,6 +69,10 @@ void __init scu_enable(void __iomem *scu_base)
 	 * initialised is visible to the other CPUs.
 	 */
 	flush_cache_all();
+
+#ifdef CONFIG_MACH_PX
+	logbuf_force_unlock();
+#endif
 }
 
 /*

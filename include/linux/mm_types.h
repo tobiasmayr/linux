@@ -36,10 +36,24 @@ struct page {
 					 * updated asynchronously */
 	atomic_t _count;		/* Usage count, see below. */
 	union {
-		atomic_t _mapcount;	/* Count of ptes mapped in mms,
-					 * to show when page is mapped
-					 * & limit reverse map searches.
-					 */
+		/*
+		 * Count of ptes mapped in
+		 * mms, to show when page is
+		 * mapped & limit reverse map
+		 * searches.
+		 *
+		 * Used also for tail pages
+		 * refcounting instead of
+		 * _count. Tail pages cannot
+		 * be mapped and keeping the
+		 * tail page _count zero at
+		 * all times guarantees
+		 * get_page_unless_zero() will
+		 * never succeed on tail
+		 * pages.
+		 */
+		atomic_t _mapcount;
+
 		struct {		/* SLUB */
 			u16 inuse;
 			u16 objects;
@@ -184,6 +198,9 @@ struct vm_area_struct {
 #ifdef CONFIG_NUMA
 	struct mempolicy *vm_policy;	/* NUMA policy for the VMA */
 #endif
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+	int vma_swap_done;
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 };
 
 struct core_thread {
@@ -201,8 +218,17 @@ enum {
 	MM_FILEPAGES,
 	MM_ANONPAGES,
 	MM_SWAPENTS,
+#ifdef CONFIG_LOWMEM_CHECK
+	MM_FILE_LOWPAGES, /* pages from lower zones in file rss*/
+	MM_ANON_LOWPAGES, /* pages from lower zones in anon rss*/
+	MM_LOW_SWAPENTS,
+#endif
 	NR_MM_COUNTERS
 };
+
+#ifdef CONFIG_LOWMEM_CHECK
+#define LOWMEM_COUNTER	3
+#endif
 
 #if USE_SPLIT_PTLOCKS && defined(CONFIG_MMU)
 #define SPLIT_RSS_COUNTING
@@ -316,6 +342,9 @@ struct mm_struct {
 #ifdef CONFIG_CPUMASK_OFFSTACK
 	struct cpumask cpumask_allocation;
 #endif
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+	int mm_swap_done;
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 };
 
 static inline void mm_init_cpumask(struct mm_struct *mm)

@@ -39,6 +39,12 @@
 #include <linux/magic.h>
 #include "ecryptfs_kernel.h"
 
+
+#ifdef CONFIG_WTL_ENCRYPTION_FILTER
+#include <linux/ctype.h>
+#endif
+
+
 /**
  * Module parameter that defines the ecryptfs_verbosity level.
  */
@@ -175,6 +181,10 @@ enum { ecryptfs_opt_sig, ecryptfs_opt_ecryptfs_sig,
        ecryptfs_opt_encrypted_view, ecryptfs_opt_fnek_sig,
        ecryptfs_opt_fn_cipher, ecryptfs_opt_fn_cipher_key_bytes,
        ecryptfs_opt_unlink_sigs, ecryptfs_opt_mount_auth_tok_only,
+       ecryptfs_opt_check_dev_ruid,
+#ifdef CONFIG_WTL_ENCRYPTION_FILTER
+	ecryptfs_opt_enable_filtering,
+#endif
        ecryptfs_opt_err };
 
 static const match_table_t tokens = {
@@ -191,6 +201,10 @@ static const match_table_t tokens = {
 	{ecryptfs_opt_fn_cipher_key_bytes, "ecryptfs_fn_key_bytes=%u"},
 	{ecryptfs_opt_unlink_sigs, "ecryptfs_unlink_sigs"},
 	{ecryptfs_opt_mount_auth_tok_only, "ecryptfs_mount_auth_tok_only"},
+	{ecryptfs_opt_check_dev_ruid, "ecryptfs_check_dev_ruid"},
+#ifdef CONFIG_WTL_ENCRYPTION_FILTER
+	{ecryptfs_opt_enable_filtering, "ecryptfs_enable_filtering=%s"},
+#endif
 	{ecryptfs_opt_err, NULL}
 };
 
@@ -231,11 +245,62 @@ static void ecryptfs_init_mount_crypt_stat(
 	mutex_init(&mount_crypt_stat->global_auth_tok_list_mutex);
 	mount_crypt_stat->flags |= ECRYPTFS_MOUNT_CRYPT_STAT_INITIALIZED;
 }
+#ifdef CONFIG_WTL_ENCRYPTION_FILTER
 
+static int parse_enc_file_filter_parms(
+	struct ecryptfs_mount_crypt_stat *mcs, char *str)
+{
+	char *token = NULL;
+	int count = 0;
+	mcs->max_name_filter_len = 0;
+	while ((token = strsep(&str, "|")) != NULL) {
+		if (count >= ENC_NAME_FILTER_MAX_INSTANCE)
+			return -1;
+		strncpy(mcs->enc_filter_name[count++],
+			token, ENC_NAME_FILTER_MAX_LEN);
+		if (mcs->max_name_filter_len < strlen(token))
+			mcs->max_name_filter_len = strlen(token);
+	}
+	return 0;
+}
+
+
+static int parse_enc_ext_filter_parms(
+	struct ecryptfs_mount_crypt_stat *mcs, char *str)
+{
+	char *token = NULL;
+	int count = 0;
+	while ((token = strsep(&str, "|")) != NULL) {
+		if (count >= ENC_EXT_FILTER_MAX_INSTANCE)
+			return -1;
+		strncpy(mcs->enc_filter_ext[count++],
+			token, ENC_EXT_FILTER_MAX_LEN);
+	}
+	return 0;
+}
+
+static int parse_enc_filter_parms(
+	struct ecryptfs_mount_crypt_stat *mcs, char *str)
+{
+	char *token = NULL;
+	if (!strcmp("*", str)) {
+		mcs->flags |= ECRYPTFS_ENABLE_NEW_PASSTHROUGH;
+		return 0;
+	}
+	token = strsep(&str, ":");
+	if (token != NULL)
+		parse_enc_file_filter_parms(mcs, token);
+	token = strsep(&str, ":");
+	if (token != NULL)
+		parse_enc_ext_filter_parms(mcs, token);
+	return 0;
+}
+#endif
 /**
  * ecryptfs_parse_options
  * @sb: The ecryptfs super block
  * @options: The options passed to the kernel
+ * @check_ruid: set to 1 if device uid should be checked against the ruid
  *
  * Parse mount options:
  * debug=N 	   - ecryptfs_verbosity level for debug output
@@ -251,7 +316,8 @@ static void ecryptfs_init_mount_crypt_stat(
  *
  * Returns zero on success; non-zero on error
  */
-static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options)
+static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
+				  uid_t *check_ruid)
 {
 	char *p;
 	int rc = 0;
@@ -275,6 +341,8 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options)
 	char *fnek_src;
 	char *cipher_key_bytes_src;
 	char *fn_cipher_key_bytes_src;
+
+	*check_ruid = 0;
 
 	if (!options) {
 		rc = -EINVAL;
@@ -380,6 +448,22 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options)
 			mount_crypt_stat->flags |=
 				ECRYPTFS_GLOBAL_MOUNT_AUTH_TOK_ONLY;
 			break;
+		case ecryptfs_opt_check_dev_ruid:
+			*check_ruid = 1;
+			break;
+#ifdef CONFIG_WTL_ENCRYPTION_FILTER
+		case ecryptfs_opt_enable_filtering:
+			rc = parse_enc_filter_parms(mount_crypt_stat,
+							 args[0].from);
+			if (rc) {
+				printk(KERN_ERR "Error attempting to parse encryption "
+							"filtering parameters.\n");
+				rc = -EINVAL;
+				goto out;
+			}
+			mount_crypt_stat->flags |= ECRYPTFS_ENABLE_FILTERING;
+			break;
+#endif
 		case ecryptfs_opt_err:
 		default:
 			printk(KERN_WARNING
@@ -475,6 +559,7 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 	const char *err = "Getting sb failed";
 	struct inode *inode;
 	struct path path;
+	uid_t check_ruid;
 	int rc;
 
 	sbi = kmem_cache_zalloc(ecryptfs_sb_info_cache, GFP_KERNEL);
@@ -483,7 +568,7 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 		goto out;
 	}
 
-	rc = ecryptfs_parse_options(sbi, raw_data);
+	rc = ecryptfs_parse_options(sbi, raw_data, &check_ruid);
 	if (rc) {
 		err = "Error parsing options";
 		goto out;
@@ -521,6 +606,15 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 			"known incompatibilities\n");
 		goto out_free;
 	}
+
+	if (check_ruid && path.dentry->d_inode->i_uid != current_uid()) {
+		rc = -EPERM;
+		printk(KERN_ERR "Mount of device (uid: %d) not owned by "
+		       "requested user (uid: %d)\n",
+		       path.dentry->d_inode->i_uid, current_uid());
+		goto out_free;
+	}
+
 	ecryptfs_set_superblock_lower(s, path.dentry->d_sb);
 	s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
 	s->s_blocksize = path.dentry->d_sb->s_blocksize;
@@ -838,6 +932,7 @@ static void __exit ecryptfs_exit(void)
 	unregister_filesystem(&ecryptfs_fs_type);
 	ecryptfs_free_kmem_caches();
 }
+
 
 MODULE_AUTHOR("Michael A. Halcrow <mhalcrow@us.ibm.com>");
 MODULE_DESCRIPTION("eCryptfs");
