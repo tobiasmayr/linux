@@ -8,11 +8,10 @@ static u64 samsung_device_dma_mask = DMA_BIT_MASK(32);
 
 static struct mali_gpu_device_data mali_gpu_data = {
         .shared_mem_size = 256*1024*1024,
-#ifdef CONFIG_MALI_DVFS
         .utilization_interval = 1000,
-        .utilization_handler = mali_gpu_utilization_handler,
-#endif
+        .utilization_callback = mali_gpu_utilization_handler,
 };
+
 static struct resource mali_gpu_resource[] = {
 		MALI_GPU_RESOURCES_MALI400_MP4(MALI_BASE_ADDR,
 			IRQ_GP_3D,
@@ -26,7 +25,7 @@ static struct resource mali_gpu_resource[] = {
 			IRQ_PP3_3D,
 			IRQ_PPMMU3_3D)
 };
-  
+
 struct platform_device mali_gpu_device = {
         .name           = MALI_GPU_NAME_UTGARD,
         .id             = 0,

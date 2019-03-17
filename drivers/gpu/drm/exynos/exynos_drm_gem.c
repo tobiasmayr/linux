@@ -1555,9 +1555,10 @@ int exynos_drm_gem_dumb_create(struct drm_file *file_priv,
 	 */
 
 	args->pitch = args->width * args->bpp >> 3;
+	args->pitch = round_up(args->pitch, 64);
 	args->size = PAGE_ALIGN(args->pitch * args->height);
 
-	exynos_gem_obj = exynos_drm_gem_create(dev, args->flags, args->size);
+	exynos_gem_obj = exynos_drm_gem_create(dev, EXYNOS_BO_CONTIG | EXYNOS_BO_WC, args->size);
 	if (IS_ERR(exynos_gem_obj))
 		return PTR_ERR(exynos_gem_obj);
 

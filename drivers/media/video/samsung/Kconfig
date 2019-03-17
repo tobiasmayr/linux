@@ -39,7 +39,6 @@ if VIDEO_MALI_R2P4
 endif
 
 if VIDEO_MALI_R4P0
-        source "drivers/media/video/samsung/ump_r4p0/Kconfig"
         source "drivers/media/video/samsung/mali_r4p0/Kconfig"
 endif
 

@@ -473,7 +473,7 @@ _mali_osk_errcode_t mali_platform_deinit()
 	MALI_SUCCESS;
 }
 
-void mali_gpu_utilization_handler(u32 utilization)
+void mali_gpu_utilization_handler(struct mali_gpu_utilization_data *utilization)
 {
 	if (bPoweroff==0)
 	{

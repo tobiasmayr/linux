@@ -12,7 +12,7 @@
 #define __ARCH_CONFIG_H__
 /* Configuration for the EB platform with ZBT memory enabled */
 /*zepplin added 2010.08.17 for orion configuration*/
-#define MALI_BASE_ADDR 		   0x13000000
+#define MALI_BASE_ADDR 	0x13000000
 #define GP_ADDR 	MALI_BASE_ADDR
 #define L2_ADDR 	MALI_BASE_ADDR+0x1000
 #define PMU_ADDR 	MALI_BASE_ADDR+0x2000
@@ -32,11 +32,13 @@
 #define MEM_MALI_OS_SIZE 0x40000000
 
 /*for dedicated memory*/
-#define MEM_MALI_SIZE 	 256*1024*1024
-//#define MEM_MALI_BASE    0x60000000 - MEM_MALI_SIZE 
-#define MEM_MALI_BASE	 0x13000000
+#define MEM_MALI_SIZE		256*1024*1024
+#define MEM_MALI_BASE		0x80000000 - MEM_MALI_SIZE
 
-//#define IRQ_SPI(x)              (x+32)
+#define S5P_IRQ_OFFSET		(32)
+#define S5P_IRQ(x)		((x) + S5P_IRQ_OFFSET)
+#define IRQ_SPI(x)		S5P_IRQ(x+32)
+
 #define IRQ_PPMMU0_3D           IRQ_SPI(118)
 #define IRQ_PPMMU1_3D           IRQ_SPI(119)
 #define IRQ_PPMMU2_3D           IRQ_SPI(120)

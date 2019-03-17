@@ -16,7 +16,9 @@
 #ifndef __MALI_PLATFORM_H__
 #define __MALI_PLATFORM_H__
 
+#include <linux/mali/mali_utgard.h>
 #include "mali_osk.h"
+
 #ifndef USING_MALI_PMM
 /* @brief System power up/down cores that can be passed into mali_platform_powerdown/up() */
 #define MALI_PLATFORM_SYSTEM  0
@@ -82,7 +84,7 @@ _mali_osk_errcode_t mali_platform_power_mode_change(mali_power_mode power_mode);
  *
  * @param utilization The workload utilization of the Mali GPU. 0 = no utilization, 256 = full utilization.
  */
-void mali_gpu_utilization_handler(u32 utilization);
+void mali_gpu_utilization_handler(struct mali_gpu_utilization_data *utilization);
 
 /** @brief Setting the power domain of MALI
  *
